@@ -1,0 +1,896 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Krug API",
+    "version": "0.1.0",
+    "description": "API for circles: one season of weekly meetings with the same people."
+  },
+  "components": {
+    "securitySchemes": {
+      "devUser": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-dev-user-id",
+        "description": "TEMPORARY development auth, replaced by Better Auth sessions in step 0.7"
+      }
+    },
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "db": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "down"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "db"
+        ]
+      },
+      "CircleDetail": {
+        "type": "object",
+        "properties": {
+          "circle": {
+            "$ref": "#/components/schemas/Circle"
+          },
+          "meetings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Meeting"
+            }
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Member"
+            },
+            "description": "Joined people only; names, never contacts"
+          },
+          "me": {
+            "$ref": "#/components/schemas/MyMembership"
+          },
+          "spotsLeft": {
+            "type": "integer"
+          },
+          "waitlistCount": {
+            "type": "integer"
+          },
+          "chatLink": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "invite": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "url"
+            ],
+            "description": "Only for the organizer"
+          }
+        },
+        "required": [
+          "circle",
+          "meetings",
+          "members",
+          "me",
+          "spotsLeft",
+          "waitlistCount",
+          "chatLink",
+          "invite"
+        ]
+      },
+      "Circle": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "activity": {
+            "type": "string"
+          },
+          "language": {
+            "$ref": "#/components/schemas/Locale"
+          },
+          "city": {
+            "type": "string"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "weekday": {
+            "type": "integer"
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "weeks": {
+            "type": "integer"
+          },
+          "capacity": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "recruiting",
+              "active",
+              "finished",
+              "cancelled"
+            ]
+          },
+          "venueText": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "activity",
+          "language",
+          "city",
+          "timeZone",
+          "weekday",
+          "startTime",
+          "weeks",
+          "capacity",
+          "status",
+          "venueText"
+        ]
+      },
+      "Locale": {
+        "type": "string",
+        "enum": [
+          "hy",
+          "ru",
+          "en"
+        ]
+      },
+      "Meeting": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "index": {
+            "type": "integer"
+          },
+          "startsAt": {
+            "type": "string",
+            "description": "UTC, ISO 8601"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "scheduled",
+              "cancelled",
+              "done"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "index",
+          "startsAt",
+          "status"
+        ]
+      },
+      "Member": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "organizer",
+              "co_host",
+              "member"
+            ]
+          }
+        },
+        "required": [
+          "userId",
+          "name",
+          "role"
+        ]
+      },
+      "MyMembership": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "organizer",
+              "co_host",
+              "member"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "joined",
+              "waitlisted",
+              "left",
+              "removed"
+            ]
+          }
+        },
+        "required": [
+          "role",
+          "status"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "not_found"
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {}
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "CreateCircleBody": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "example": "Настолки по четвергам"
+          },
+          "activity": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "example": "board games"
+          },
+          "language": {
+            "$ref": "#/components/schemas/Locale"
+          },
+          "weekday": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 7,
+            "description": "ISO weekday, 1 = Monday",
+            "example": 4
+          },
+          "startTime": {
+            "type": "string",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "example": "19:30"
+          },
+          "weeks": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16,
+            "default": 8
+          },
+          "capacity": {
+            "type": "integer",
+            "minimum": 3,
+            "maximum": 20,
+            "default": 8,
+            "description": "Total people in the circle, organizer included"
+          },
+          "venueText": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "startDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "example": "2026-11-12",
+            "description": "Earliest start date in the circle time zone; default today"
+          },
+          "chatLink": {
+            "type": "string",
+            "maxLength": 300,
+            "format": "uri",
+            "description": "Group chat link shown to members"
+          }
+        },
+        "required": [
+          "title",
+          "activity",
+          "language",
+          "weekday",
+          "startTime"
+        ]
+      },
+      "InvitePreview": {
+        "type": "object",
+        "properties": {
+          "circleId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Only when the viewer is already in the circle"
+          },
+          "myStatus": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "joined",
+              "waitlisted",
+              null
+            ],
+            "description": "The signed-in viewer's place in this circle, if any"
+          },
+          "title": {
+            "type": "string"
+          },
+          "activity": {
+            "type": "string"
+          },
+          "language": {
+            "$ref": "#/components/schemas/Locale"
+          },
+          "weekday": {
+            "type": "integer"
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "weeks": {
+            "type": "integer"
+          },
+          "venueText": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "firstMeetingAt": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "spotsLeft": {
+            "type": "integer"
+          },
+          "organizerName": {
+            "type": "string",
+            "description": "First name only"
+          },
+          "open": {
+            "type": "boolean",
+            "description": "Whether people can still join (or join the waitlist)"
+          }
+        },
+        "required": [
+          "circleId",
+          "myStatus",
+          "title",
+          "activity",
+          "language",
+          "weekday",
+          "startTime",
+          "timeZone",
+          "weeks",
+          "venueText",
+          "firstMeetingAt",
+          "spotsLeft",
+          "organizerName",
+          "open"
+        ]
+      },
+      "JoinResult": {
+        "type": "object",
+        "properties": {
+          "circleId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "joined",
+              "waitlisted"
+            ]
+          }
+        },
+        "required": [
+          "circleId",
+          "status"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Liveness and database check",
+        "responses": {
+          "200": {
+            "description": "Up",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/circles": {
+      "post": {
+        "tags": [
+          "Circles"
+        ],
+        "summary": "Create a circle and its season schedule",
+        "security": [
+          {
+            "devUser": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCircleBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircleDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/circles/{id}": {
+      "get": {
+        "tags": [
+          "Circles"
+        ],
+        "summary": "A circle as seen by one of its members",
+        "security": [
+          {
+            "devUser": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The circle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircleDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/circles/{id}/leave": {
+      "post": {
+        "tags": [
+          "Circles"
+        ],
+        "summary": "Leave a circle",
+        "security": [
+          {
+            "devUser": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Left"
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/invites/{code}": {
+      "get": {
+        "tags": [
+          "Invites"
+        ],
+        "summary": "Public preview of a circle behind an invite link (sign-in optional)",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "7K3M9QX2DA"
+            },
+            "required": true,
+            "name": "code",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitePreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/invites/{code}/join": {
+      "post": {
+        "tags": [
+          "Invites"
+        ],
+        "summary": "Join the circle, or its waitlist when it is full",
+        "security": [
+          {
+            "devUser": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "example": "7K3M9QX2DA"
+            },
+            "required": true,
+            "name": "code",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Joined or waitlisted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JoinResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {}
+}

@@ -1,0 +1,7 @@
+pnpm-lock.yaml
+**/drizzle/**
+**/generated/**
+apps/app/.expo
+packages/api-client/openapi.json
+**/dist/**
+**/.turbo/**

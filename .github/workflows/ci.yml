@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # version comes from packageManager in package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Format
+        run: pnpm format:check
+
+      - name: Typecheck, lint, test
+        run: pnpm check
+
+      - name: Generated API client is up to date
+        run: |
+          pnpm --filter @krug/api-client generate
+          git diff --exit-code -- packages/api-client || {
+            echo "::error::API changed but the client was not regenerated. Run: pnpm --filter @krug/api-client generate"
+            exit 1
+          }
+
+      - name: Migrations match the schema
+        run: |
+          pnpm --filter @krug/db db:generate
+          git diff --exit-code -- packages/db/drizzle || {
+            echo "::error::Schema changed without a migration. Run: pnpm --filter @krug/db db:generate"
+            exit 1
+          }
+
+      - name: Web build
+        run: pnpm --filter @krug/app build
+        env:
+          EXPO_PUBLIC_API_URL: https://api.example.invalid
+
+      - name: API build
+        run: pnpm --filter @krug/api build

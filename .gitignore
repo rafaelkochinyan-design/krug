@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.turbo/
+coverage/
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+# Expo
+apps/app/.expo/
+apps/app/web-build/
+apps/app/expo-env.d.ts
+apps/app/ios/
+apps/app/android/
+# local dev database
+.pglite/
