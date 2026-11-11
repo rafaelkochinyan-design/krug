@@ -5,3 +5,4 @@ apps/app/.expo
 packages/api-client/openapi.json
 **/dist/**
 **/.turbo/**
+.claude/
