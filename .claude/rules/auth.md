@@ -27,6 +27,9 @@
    lines and the handler calls `requireUser(c)`.
 2. Authorization is checked on the **resource**, in the service: membership in the circle, organizer role, etc.
    Return `404` to outsiders for private resources.
+   **Authorization decisions go through `@krug/domain` policy functions** (`packages/domain/src/policy.ts`),
+   never inline. For example, use `canLeave`, `canJoin`, `canSeeInvite`, etc. This keeps rules testable and
+   in one place.
 3. Never take the acting user's id from the body or the query. It always comes from `c.get('userId')`.
 4. Test it: anonymous → 401 (and 401 even with an invalid body); outsider → 404/403; the right user → success.
 

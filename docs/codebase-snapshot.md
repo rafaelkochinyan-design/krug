@@ -113,6 +113,8 @@ Domain (`packages/domain/src`, all pure):
   - `isInviteCode(value)`.
   - `normalizeInviteCode(input)`: accepts full links, lower case, dashes and spaces, and maps O→0 and I/L→1.
 - `limits.ts`: `MIN_WEEKS` 1, `MAX_WEEKS` 16, `MIN_CAPACITY` 3, `MAX_CAPACITY` 20.
+- `policy.ts`: access-control functions (`canJoin`, `canLeave`, `canViewCircle`, `canSeeInvite`, `canSeeChatLink`, `canSeeMemberNames`, `canRemoveMember`, `canEditCircle`, `canCreateCircle`) and field-visibility projections (`firstName`, `toCircleMember`, `toInviteMember`). All API authorization decisions go through these; mapping to HTTP codes stays in the service.
+- In `membership.ts` (added PR1): `waitlistPosition(orderedIds, userId) → 1-based number | null`; `seasonProgress({ meetingStartsAt, weeks, now }) → { phase, week, of, daysUntilStart }`; `nextScheduledIndex(meetings, now) → index | null`.
 
 API services (`apps/api/src/modules/circles/service.ts`):
 
@@ -162,7 +164,8 @@ Malformed or unknown invite codes get 404. On signed-in routes, `authRequired` a
 - **401 before validation**: `router.use(path, authRequired)` in `circles/routes.ts`, with the guard in `auth.ts`.
 - **Error envelope**: `errors.ts` and the `defaultHook` in `app.ts`, which returns `validation_error` with
   `details` of the form `[{ path, message }]`.
-- **Privacy in the public preview**: the `firstName()` helper in `circles/service.ts`.
+- **Privacy in the public preview**: `firstName()` in `packages/domain/src/policy.ts` (moved from service in PR1); `toCircleMember()` for the member list whitelist.
+- **Authorization via domain policy**: services call `canJoin`, `canLeave`, `canSeeChatLink`, etc. from `@krug/domain` (root; also importable as `@krug/domain/policy` via the subpath) and map `JoinDenial`/`LeaveDenial` reasons to HTTP codes inline.
 - **Platform seam**: `apps/app/src/lib/storage.ts`, a synchronous interface (web: guarded `localStorage`;
   native: memory for now).
 - **API calls in the app**: `unwrap(api.GET(...))` inside `useQuery` / `useMutation`, and `RequestError` for

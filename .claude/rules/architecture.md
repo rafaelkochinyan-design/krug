@@ -13,9 +13,12 @@ apps/app (Expo)  ──►  packages/api-client  ──(HTTP /v1)──►  apps
      └──►  packages/i18n                                        └──►  packages/db (Drizzle)
 ```
 
-- `packages/domain`: pure business rules (schedule, membership placement, invite codes, limits). It depends on
-  nothing in the repo; `luxon` is its only runtime dependency. **No I/O.** Both the API and the app call it, and
-  neither re-implements it.
+- `packages/domain`: pure business rules (schedule, membership placement, invite codes, limits, access policy).
+  It depends on nothing in the repo; `luxon` is its only runtime dependency. **No I/O.** Both the API and the app
+  call it, and neither re-implements it.
+  - `policy.ts`: access-control functions (`canJoin`, `canLeave`, `canViewCircle`, etc.) and field-visibility
+    projections (`toCircleMember`, `firstName`, etc.). Every authorization decision in the API calls these;
+    never inline.
 - `packages/db`: Drizzle schema, committed SQL migrations, and `createTestDb()` (PGlite) in `@krug/db/testing`.
   Only the API imports it.
 - `packages/i18n`: hy / ru / en messages typed against English, plus `searchKey()` transliteration.

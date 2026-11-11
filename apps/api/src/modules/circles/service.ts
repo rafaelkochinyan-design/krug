@@ -1,16 +1,44 @@
 import { and, asc, count, eq, inArray, or } from 'drizzle-orm';
 import { DateTime } from 'luxon';
-import { blocks, circles, meetings, memberships, users, type Db } from '@krug/db';
-import { createInviteCode, generateSchedule, placeNewMember, type IsoWeekday } from '@krug/domain';
+import {
+  blocks,
+  circles,
+  type circleStatusEnum,
+  meetings,
+  memberships,
+  users,
+  type Db,
+} from '@krug/db';
+import {
+  canJoin,
+  canLeave,
+  canSeeChatLink,
+  canSeeInvite,
+  createInviteCode,
+  firstName,
+  generateSchedule,
+  isCircleOpen,
+  placeNewMember,
+  toCircleMember,
+  type CircleStatus,
+  type IsoWeekday,
+  type ViewerMembership,
+} from '@krug/domain';
 import { ApiError, forbidden, notFound } from '../../errors';
 import type { CreateCircleInput } from './schemas';
 
+// Compile-time guard: if the DB circle_status enum and the domain CircleStatus union ever
+// diverge, these two identity functions fail to compile (the return type won't match).
+// They are intentionally unused at runtime — disable the unused-var lint rule for them.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _dbToCircleStatus = (_: (typeof circleStatusEnum.enumValues)[number]): CircleStatus => _;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _circleToDbStatus = (_: CircleStatus): (typeof circleStatusEnum.enumValues)[number] => _;
+
 const DEFAULT_TIME_ZONE = 'Asia/Yerevan';
-const OPEN_STATUSES = ['recruiting', 'active'] as const;
 
 type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
-const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? '';
 const isUniqueViolation = (e: unknown) =>
   typeof e === 'object' && e !== null && 'code' in e && (e as { code: unknown }).code === '23505';
 
@@ -107,7 +135,7 @@ export async function getCircleDetail(db: Db, circleId: string, userId: string, 
     countByStatus(db, circle.id),
   ]);
 
-  const isOrganizer = me.role === 'organizer';
+  const meMs: ViewerMembership = { role: me.role, status: me.status };
   return {
     circle: {
       id: circle.id,
@@ -129,12 +157,12 @@ export async function getCircleDetail(db: Db, circleId: string, userId: string, 
       startsAt: m.startsAt.toISOString(),
       status: m.status,
     })),
-    members: memberRows,
+    members: memberRows.map(toCircleMember),
     me: { role: me.role, status: me.status },
     spotsLeft: Math.max(0, circle.capacity - counts.joined),
     waitlistCount: counts.waitlisted,
-    chatLink: me.status === 'joined' ? circle.chatLink : null,
-    invite: isOrganizer
+    chatLink: canSeeChatLink(meMs) ? circle.chatLink : null,
+    invite: canSeeInvite(meMs)
       ? { code: circle.inviteCode, url: `${appUrl}/i/${circle.inviteCode}` }
       : null,
   };
@@ -177,7 +205,7 @@ export async function getInvitePreview(db: Db, code: string, viewerId?: string) 
     firstMeetingAt: first?.startsAt.toISOString() ?? null,
     spotsLeft: Math.max(0, circle.capacity - counts.joined),
     organizerName: firstName(row.organizerName),
-    open: (OPEN_STATUSES as readonly string[]).includes(circle.status),
+    open: isCircleOpen(circle.status),
   };
 }
 
@@ -190,9 +218,6 @@ export async function joinByInvite(db: Db, code: string, userId: string) {
       .where(eq(circles.inviteCode, code))
       .for('update');
     if (!circle) throw notFound('Invite');
-    if (!(OPEN_STATUSES as readonly string[]).includes(circle.status)) {
-      throw new ApiError(409, 'conflict', 'This circle is no longer accepting people');
-    }
 
     const [blocked] = await tx
       .select({ a: blocks.blockerId })
@@ -204,16 +229,37 @@ export async function joinByInvite(db: Db, code: string, userId: string) {
         ),
       )
       .limit(1);
-    if (blocked) throw forbidden("You can't join this circle");
 
     const [existing] = await tx
       .select()
       .from(memberships)
       .where(and(eq(memberships.circleId, circle.id), eq(memberships.userId, userId)));
-    if (existing?.status === 'joined' || existing?.status === 'waitlisted') {
-      return { circleId: circle.id, status: existing.status }; // idempotent: pressing twice is harmless
+
+    const membership: ViewerMembership | null = existing
+      ? { role: existing.role, status: existing.status }
+      : null;
+
+    // isAdult is not enforced until PR10; requireAdult defaults to false
+    const joinResult = canJoin({
+      viewer: { userId, isAdult: false },
+      circleStatus: circle.status,
+      membership,
+      blocked: !!blocked,
+    });
+
+    if (!joinResult.allowed) {
+      if (joinResult.reason === 'not_open') {
+        throw new ApiError(409, 'conflict', 'This circle is no longer accepting people');
+      }
+      // blocked, removed, not_adult → 403
+      throw forbidden("You can't join this circle");
     }
-    if (existing?.status === 'removed') throw forbidden("You can't join this circle");
+
+    if (joinResult.alreadyMember) {
+      // idempotent: pressing twice is harmless
+      // existingStatus is provided by canJoin when alreadyMember is true
+      return { circleId: circle.id, status: joinResult.existingStatus };
+    }
 
     const { joined } = await countByStatus(tx, circle.id);
     const status = placeNewMember(joined, circle.capacity);
@@ -234,9 +280,23 @@ export async function leaveCircle(db: Db, circleId: string, userId: string) {
     .select()
     .from(memberships)
     .where(and(eq(memberships.circleId, circleId), eq(memberships.userId, userId)));
-  if (!m || (m.status !== 'joined' && m.status !== 'waitlisted')) throw notFound('Circle');
-  if (m.role === 'organizer')
-    throw new ApiError(409, 'conflict', 'The organizer cannot leave; hand the circle over first');
-  await db.update(memberships).set({ status: 'left' }).where(eq(memberships.id, m.id));
+
+  const membership: ViewerMembership | null = m ? { role: m.role, status: m.status } : null;
+
+  const result = canLeave(membership);
+  if (!result.allowed) {
+    if (result.reason === 'organizer') {
+      throw new ApiError(409, 'conflict', 'The organizer cannot leave; hand the circle over first');
+    }
+    // not_member → 404
+    throw notFound('Circle');
+  }
+
+  // canLeave returned {allowed:true} → m is non-null and status is joined or waitlisted.
+  // Filter by (circleId, userId) to avoid the non-null assertion on m.id.
+  await db
+    .update(memberships)
+    .set({ status: 'left' })
+    .where(and(eq(memberships.circleId, circleId), eq(memberships.userId, userId)));
   // Offering the freed spot to the waitlist is step 1.6 (worker job with a 24 h offer).
 }
